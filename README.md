@@ -246,33 +246,6 @@ This removes:
 
 It does not remove Docker and does not delete DNS records.
 
-## GitHub Test Flow
-
-Create a repo containing:
-
-```text
-README.md
-install.sh
-.gitignore
-```
-
-Push it to GitHub, then test on a fresh VPS:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-installer/main/install.sh -o install.sh
-sudo bash install.sh --domain mtproto.example.com
-```
-
-Before publishing, replace `Sunny8886667` in all README files with your real GitHub username. Keep the repository name as `mtproxy-faketls-installer` unless you publish it under a different name.
-
-For Cloudflare DNS:
-
-```bash
-export CF_API_TOKEN="..."
-export CF_ZONE_ID="..."
-sudo -E bash install.sh --domain mtproto.example.com --dns yes
-```
-
 ## Notes
 
 - Keep your Telegram secret and Cloudflare token private.

@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-instal
 sudo bash install.sh --domain mtproto.example.com
 ```
 
-
+把 `mtproto.example.com` 替换成你的真实域名。
 
 安装完成后，脚本会输出 Telegram 导入链接：
 
