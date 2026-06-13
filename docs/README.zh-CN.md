@@ -70,22 +70,26 @@ sudo bash install.sh \
 
 ## Cloudflare DNS 自动配置
 
-创建 Cloudflare API Token，权限需要：
+最漂亮的方式是在安装过程中让脚本自动询问 Cloudflare 配置：
 
 ```text
-Zone:DNS:Edit
-Zone:Zone:Read
+Manage Cloudflare DNS? auto/yes/no [auto]: yes
+Cloudflare API token:
+Cloudflare Zone ID, leave empty for auto-detect:
 ```
 
-然后执行：
+创建 Cloudflare API Token 的步骤：
 
-```bash
-export CF_API_TOKEN="your_token"
-export CF_ZONE_ID="your_zone_id"
-sudo -E bash install.sh --domain mtproto.example.com --dns yes
+```text
+Cloudflare Dashboard -> My Profile -> API Tokens -> Create Token -> Custom token
+权限：
+  Zone - DNS - Edit
+  Zone - Zone - Read
+Zone Resources：
+  Include - Specific zone - 你的域名
 ```
 
-脚本只会创建或更新你传入的完整域名对应的 A 记录，并保持 DNS only。
+安装时 Zone ID 可以留空，脚本会根据你的代理域名自动识别。脚本只会创建或更新你输入的完整代理域名对应的 A 记录，并保持 DNS only。
 
 ## 常用管理命令
 

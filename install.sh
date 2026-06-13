@@ -48,7 +48,7 @@ Options:
   --tag TAG                Telegram promoted-channel tag from @MTProxybot.
   --update-tag TAG         Update only the promoted-channel tag and restart.
   --cf-token TOKEN         Cloudflare API token. Or use CF_API_TOKEN env.
-  --cf-zone-id ZONE_ID     Cloudflare zone ID. Or use CF_ZONE_ID env.
+  --cf-zone-id ZONE_ID     Cloudflare zone ID. Optional; auto-detected when possible.
   --dns auto|yes|no        Manage Cloudflare DNS. Default: auto.
   --force                  Replace existing config and continue if port is in use.
   --start                  Start the service.
@@ -63,6 +63,8 @@ Options:
 Cloudflare DNS:
   The installer creates/updates only the exact hostname passed by --domain.
   The record is A, DNS-only, pointing to the server public IPv4.
+  In interactive mode, choose DNS=yes and paste only the Cloudflare API token.
+  Zone ID can usually be left empty and auto-detected from the domain.
 
 TLS/FakeTLS:
   TLS/FakeTLS mode is enabled by default.
@@ -75,10 +77,6 @@ Examples:
   sudo bash install.sh --domain mtproto.example.com
 
   sudo bash install.sh --domain mtproto.example.com --tag 0123456789abcdef0123456789abcdef
-
-  export CF_API_TOKEN="..."
-  export CF_ZONE_ID="..."
-  sudo -E bash install.sh --domain mtproto.example.com --dns yes
 
   sudo bash install.sh --update-tag 0123456789abcdef0123456789abcdef
 
@@ -254,6 +252,14 @@ prompt_optional() {
   fi
 }
 
+prompt_secret_optional() {
+  local prompt="$1"
+  local value=""
+  read -r -s -p "${prompt}: " value
+  printf '\n' >&2
+  printf '%s\n' "${value}"
+}
+
 interactive_install() {
   [[ "${ACTION}" == "install" ]] || return
 
@@ -289,6 +295,15 @@ EOF
 
   if [[ "${DO_DNS}" == "auto" ]]; then
     DO_DNS="$(prompt_optional "Manage Cloudflare DNS? auto/yes/no" "auto")"
+  fi
+
+  if [[ "${DO_DNS}" == "yes" ]]; then
+    if [[ -z "${CF_API_TOKEN}" ]]; then
+      CF_API_TOKEN="$(prompt_secret_optional "Cloudflare API token")"
+    fi
+    if [[ -z "${CF_ZONE_ID}" ]]; then
+      CF_ZONE_ID="$(prompt_optional "Cloudflare Zone ID, leave empty for auto-detect" "")"
+    fi
   fi
 }
 
@@ -774,9 +789,9 @@ cloudflare_dns() {
   if [[ "${DO_DNS}" == "no" ]]; then
     return
   fi
-  if [[ -z "${CF_API_TOKEN}" || -z "${CF_ZONE_ID}" ]]; then
+  if [[ -z "${CF_API_TOKEN}" ]]; then
     if [[ "${DO_DNS}" == "yes" ]]; then
-      die "--dns yes requires CF_API_TOKEN and CF_ZONE_ID"
+      die "--dns yes requires a Cloudflare API token"
     fi
     log "Cloudflare credentials not provided; create DNS manually:"
     log "  ${DOMAIN} -> ${public_ip} (A, DNS-only)"
@@ -796,7 +811,6 @@ token = os.environ["CF_API_TOKEN"]
 zone = os.environ["CF_ZONE_ID"]
 domain = os.environ["DOMAIN"]
 public_ip = os.environ["PUBLIC_IP"]
-base = f"https://api.cloudflare.com/client/v4/zones/{zone}/dns_records"
 headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 def request(method, url, data=None):
@@ -814,6 +828,23 @@ def request(method, url, data=None):
         raise SystemExit(json.dumps(out, indent=2))
     return out
 
+def candidate_zones(hostname):
+    parts = hostname.rstrip(".").split(".")
+    for index in range(max(0, len(parts) - 2), len(parts) - 1):
+        yield ".".join(parts[index:])
+
+if not zone:
+    for candidate in candidate_zones(domain):
+        query = urllib.parse.urlencode({"name": candidate, "status": "active", "per_page": 1})
+        result = request("GET", f"https://api.cloudflare.com/client/v4/zones?{query}")["result"]
+        if result:
+            zone = result[0]["id"]
+            print(f"Cloudflare zone detected: {result[0]['name']}")
+            break
+    if not zone:
+        raise SystemExit("Cloudflare zone auto-detect failed; pass --cf-zone-id or check token permissions")
+
+base = f"https://api.cloudflare.com/client/v4/zones/{zone}/dns_records"
 query = urllib.parse.urlencode({"name": domain, "per_page": 100})
 records = request("GET", f"{base}?{query}")["result"]
 matching_a = [rec for rec in records if rec.get("type") == "A"]

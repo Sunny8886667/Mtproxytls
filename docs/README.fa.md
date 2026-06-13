@@ -70,22 +70,26 @@ sudo bash install.sh \
 
 ## تنظیم خودکار DNS در Cloudflare
 
-یک Cloudflare API token با این دسترسی‌ها بسازید:
+بهترین روش این است که هنگام نصب، خود اسکریپت اطلاعات Cloudflare را از شما بپرسد:
 
 ```text
-Zone:DNS:Edit
-Zone:Zone:Read
+Manage Cloudflare DNS? auto/yes/no [auto]: yes
+Cloudflare API token:
+Cloudflare Zone ID, leave empty for auto-detect:
 ```
 
-سپس اجرا کنید:
+یک Cloudflare API token بسازید:
 
-```bash
-export CF_API_TOKEN="your_token"
-export CF_ZONE_ID="your_zone_id"
-sudo -E bash install.sh --domain mtproto.example.com --dns yes
+```text
+Cloudflare Dashboard -> My Profile -> API Tokens -> Create Token -> Custom token
+Permissions:
+  Zone - DNS - Edit
+  Zone - Zone - Read
+Zone Resources:
+  Include - Specific zone - your domain
 ```
 
-اسکریپت فقط همان دامنه کامل واردشده با `--domain` را ایجاد یا به‌روزرسانی می‌کند و رکورد A را به صورت DNS only نگه می‌دارد.
+در زمان نصب می‌توانید Zone ID را خالی بگذارید. اسکریپت تلاش می‌کند آن را از دامنه پروکسی شما تشخیص دهد. اسکریپت فقط همان hostname واردشده را ایجاد یا به‌روزرسانی می‌کند و رکورد A را به صورت DNS only نگه می‌دارد.
 
 ## دستورات مدیریت
 

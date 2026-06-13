@@ -106,22 +106,26 @@ exactly 32 hex characters
 
 ## Cloudflare DNS Automation
 
-Create a Cloudflare API token with:
+The cleanest setup is to let the installer ask for Cloudflare details during installation:
 
 ```text
-Zone:DNS:Edit
-Zone:Zone:Read
+Manage Cloudflare DNS? auto/yes/no [auto]: yes
+Cloudflare API token:
+Cloudflare Zone ID, leave empty for auto-detect:
 ```
 
-Then run:
+Create a Cloudflare API token:
 
-```bash
-export CF_API_TOKEN="your_token"
-export CF_ZONE_ID="your_zone_id"
-sudo -E bash install.sh --domain mtproto.example.com --dns yes
+```text
+Cloudflare Dashboard -> My Profile -> API Tokens -> Create Token -> Custom token
+Permissions:
+  Zone - DNS - Edit
+  Zone - Zone - Read
+Zone Resources:
+  Include - Specific zone - your domain
 ```
 
-The installer manages only the exact hostname passed in `--domain`. It creates or updates the matching A record and keeps it DNS-only.
+You can leave Zone ID empty in the installer. The script will try to detect it from your proxy domain. The installer manages only the exact hostname you enter and keeps the A record DNS-only.
 
 It creates:
 
@@ -156,7 +160,7 @@ Proxy: DNS only
 --tag TAG                Telegram promoted-channel tag from @MTProxybot.
 --update-tag TAG         Update only the promoted-channel tag and restart.
 --cf-token TOKEN         Cloudflare API token. Or use CF_API_TOKEN env.
---cf-zone-id ZONE_ID     Cloudflare zone ID. Or use CF_ZONE_ID env.
+--cf-zone-id ZONE_ID     Cloudflare zone ID. Optional; auto-detected when possible.
 --dns auto|yes|no        Manage Cloudflare DNS. Default: auto.
 --force                  Replace existing config and continue if port is in use.
 --start                  Start the service.

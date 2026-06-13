@@ -70,22 +70,26 @@ sudo bash install.sh \
 
 ## Cloudflare DNS Automation
 
-Create a Cloudflare API token with these permissions:
+The cleanest setup is to let the installer ask for Cloudflare details during installation:
 
 ```text
-Zone:DNS:Edit
-Zone:Zone:Read
+Manage Cloudflare DNS? auto/yes/no [auto]: yes
+Cloudflare API token:
+Cloudflare Zone ID, leave empty for auto-detect:
 ```
 
-Then run:
+Create a Cloudflare API token:
 
-```bash
-export CF_API_TOKEN="your_token"
-export CF_ZONE_ID="your_zone_id"
-sudo -E bash install.sh --domain mtproto.example.com --dns yes
+```text
+Cloudflare Dashboard -> My Profile -> API Tokens -> Create Token -> Custom token
+Permissions:
+  Zone - DNS - Edit
+  Zone - Zone - Read
+Zone Resources:
+  Include - Specific zone - your domain
 ```
 
-The installer creates or updates only the exact hostname passed with `--domain`, using a DNS-only A record.
+You can leave Zone ID empty in the installer. The script will try to detect it from your proxy domain. The installer creates or updates only the exact hostname you enter, using a DNS-only A record.
 
 ## Management Commands
 
