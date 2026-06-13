@@ -1,6 +1,6 @@
 # MTProxy FakeTLS Installer Guide
 
-This script installs a Telegram MTProto proxy with FakeTLS mode, promoted-channel tag support, Docker deployment, optional Cloudflare DNS automation, and a post-install management menu.
+This script installs a Telegram MTProto proxy with TLS/FakeTLS mode enabled by default, promoted-channel tag support, Docker deployment, optional Cloudflare DNS automation, and a post-install management menu.
 
 For script support, development, or customization, contact Telegram: `@Bill_999`
 
@@ -21,19 +21,25 @@ For script support, development, or customization, contact Telegram: `@Bill_999`
 
 If you use Cloudflare, the DNS record must be DNS only. Do not enable the orange-cloud proxy.
 
+## TLS / FakeTLS
+
+TLS/FakeTLS mode is enabled by default. The installer generates a Telegram MTProxy secret using the `ee` + SNI-domain format and runs the container in TLS-only mode.
+
+This does not require a Let's Encrypt certificate or a website SSL certificate. The SNI domain defaults to your proxy domain, and you can change it during interactive installation.
+
 ## Quick Start
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-installer/main/install.sh -o install.sh
-sudo bash install.sh --domain mtproto.example.com
+sudo bash install.sh
 ```
 
-Replace `mtproto.example.com` with your real hostname.
+During installation, the script asks for your proxy domain, port, TLS/FakeTLS SNI domain, and other optional settings.
 
 After installation, the script prints a Telegram import link:
 
 ```text
-https://t.me/proxy?server=mtproto.example.com&port=443&secret=...
+https://t.me/proxy?server=your-proxy-domain.com&port=443&secret=...
 ```
 
 Open that link in Telegram to add the proxy.

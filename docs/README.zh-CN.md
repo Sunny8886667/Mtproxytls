@@ -1,6 +1,6 @@
 # MTProxy FakeTLS 安装器使用文档
 
-这个脚本用于一键部署 Telegram MTProto 代理，支持 FakeTLS 模式、推广频道 tag、Docker 部署、Cloudflare DNS 自动配置和安装后的管理菜单。
+这个脚本用于一键部署 Telegram MTProto 代理，默认启用 TLS/FakeTLS 模式，支持推广频道 tag、Docker 部署、Cloudflare DNS 自动配置和安装后的管理菜单。
 
 脚本使用问题、脚本开发、定制请联系 Telegram：`@Bill_999`
 
@@ -21,19 +21,25 @@
 
 如果使用 Cloudflare，DNS 记录必须是 DNS only，不能开启橙云代理。
 
+## TLS / FakeTLS 说明
+
+脚本默认启用 Telegram MTProxy 的 TLS/FakeTLS 模式。它会生成 `ee` + SNI 域名格式的 Telegram secret，并让容器以 TLS-only 模式运行。
+
+这里不需要申请 Let's Encrypt 证书，也不需要网站 SSL 证书。SNI 域名默认等于你的代理域名，安装过程中可以修改。
+
 ## 快速安装
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-installer/main/install.sh -o install.sh
-sudo bash install.sh --domain mtproto.example.com
+sudo bash install.sh
 ```
 
-把 `mtproto.example.com` 替换成你的真实域名。
+安装过程中脚本会提示你输入代理域名、端口、TLS/FakeTLS SNI 域名和其他可选配置。
 
 安装完成后，脚本会输出 Telegram 导入链接：
 
 ```text
-https://t.me/proxy?server=mtproto.example.com&port=443&secret=...
+https://t.me/proxy?server=你的代理域名&port=443&secret=...
 ```
 
 打开这个链接即可在 Telegram 中添加代理。

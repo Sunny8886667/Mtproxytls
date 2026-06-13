@@ -23,6 +23,7 @@ CF_ZONE_ID="${CF_ZONE_ID:-}"
 DO_DNS="auto"
 ACTION="install"
 FORCE="0"
+INTERACTIVE_INSTALL="0"
 
 usage() {
   cat <<'EOF'
@@ -34,12 +35,14 @@ MTProxy FakeTLS installer with promoted-channel tag support.
 +------------------------------------------------------------------+
 
 Usage:
+  sudo bash install.sh
   sudo bash install.sh --domain mtproto.example.com [options]
 
 Options:
-  --domain DOMAIN          Public hostname for the proxy. Required for install.
+  --domain DOMAIN          Public hostname for the proxy. Asked interactively when omitted.
   --port PORT              Listen port. Default: 443.
-  --front-domain DOMAIN    FakeTLS SNI hostname in the Telegram secret. Default: same as --domain.
+  --tls-domain DOMAIN      TLS/FakeTLS SNI hostname in the Telegram secret. Default: same as --domain.
+  --front-domain DOMAIN    Alias for --tls-domain.
   --public-ip IP           Public IPv4. Auto-detected when omitted.
   --secret SECRET          Existing 32-hex MTProxy server secret. Auto-generated when omitted.
   --tag TAG                Telegram promoted-channel tag from @MTProxybot.
@@ -61,7 +64,14 @@ Cloudflare DNS:
   The installer creates/updates only the exact hostname passed by --domain.
   The record is A, DNS-only, pointing to the server public IPv4.
 
+TLS/FakeTLS:
+  TLS/FakeTLS mode is enabled by default.
+  The generated Telegram secret uses the ee + SNI-domain format.
+  No Let's Encrypt or website SSL certificate is required for this MTProxy mode.
+
 Examples:
+  sudo bash install.sh
+
   sudo bash install.sh --domain mtproto.example.com
 
   sudo bash install.sh --domain mtproto.example.com --tag 0123456789abcdef0123456789abcdef
@@ -101,7 +111,7 @@ die() {
 }
 
 need_root() {
-  [[ "${EUID}" -eq 0 ]] || die "run as root, for example: sudo bash install.sh --domain mtproto.example.com"
+  [[ "${EUID}" -eq 0 ]] || die "run as root, for example: sudo bash install.sh"
 }
 
 have_cmd() {
@@ -154,7 +164,7 @@ parse_args() {
         DOMAIN="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --port)
         PORT="$(require_value "$1" "${2:-}")"; shift 2 ;;
-      --front-domain)
+      --front-domain|--tls-domain)
         FRONT_DOMAIN="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --public-ip)
         PUBLIC_IP="$(require_value "$1" "${2:-}")"; shift 2 ;;
@@ -219,6 +229,66 @@ validate_common() {
   fi
   if [[ -n "${TAG}" && ! "${TAG}" =~ ^[[:xdigit:]]{32}$ ]]; then
     die "--tag/--update-tag must be exactly 32 hex characters from @MTProxybot"
+  fi
+}
+
+prompt_required() {
+  local prompt="$1"
+  local value=""
+  while [[ -z "${value}" ]]; do
+    read -r -p "${prompt}: " value
+  done
+  printf '%s\n' "${value}"
+}
+
+prompt_optional() {
+  local prompt="$1"
+  local default="$2"
+  local value=""
+  if [[ -n "${default}" ]]; then
+    read -r -p "${prompt} [${default}]: " value
+    printf '%s\n' "${value:-${default}}"
+  else
+    read -r -p "${prompt}: " value
+    printf '%s\n' "${value}"
+  fi
+}
+
+interactive_install() {
+  [[ "${ACTION}" == "install" ]] || return
+
+  if [[ -z "${DOMAIN}" ]]; then
+    [[ -t 0 ]] || die "--domain is required in non-interactive mode"
+    INTERACTIVE_INSTALL="1"
+    cat <<'EOF'
+
+Interactive setup
+Enter the domain name you want to use for this Telegram MTProxy.
+Example: proxy.yourdomain.com
+EOF
+    DOMAIN="$(prompt_required "Proxy domain")"
+  fi
+
+  [[ "${INTERACTIVE_INSTALL}" == "1" ]] || return
+
+  if [[ "${PORT}" == "${DEFAULT_PORT}" ]]; then
+    PORT="$(prompt_optional "Listen port" "${DEFAULT_PORT}")"
+  fi
+
+  if [[ -z "${FRONT_DOMAIN}" ]]; then
+    FRONT_DOMAIN="$(prompt_optional "TLS/FakeTLS SNI domain" "${DOMAIN}")"
+  fi
+
+  if [[ -z "${PUBLIC_IP}" ]]; then
+    PUBLIC_IP="$(prompt_optional "Public IPv4, leave empty for auto-detect" "")"
+  fi
+
+  if [[ -z "${TAG}" ]]; then
+    TAG="$(prompt_optional "Promoted channel tag from @MTProxybot, leave empty to skip" "")"
+  fi
+
+  if [[ "${DO_DNS}" == "auto" ]]; then
+    DO_DNS="$(prompt_optional "Manage Cloudflare DNS? auto/yes/no" "auto")"
   fi
 }
 
@@ -556,6 +626,8 @@ Telegram:
   Server: ${DOMAIN}
   Port:   ${PORT}
   Secret: ${tg_secret}
+  TLS:    FakeTLS enabled
+  SNI:    ${FRONT_DOMAIN}
 
 Import link:
   https://t.me/proxy?server=${DOMAIN}&port=${PORT}&secret=${tg_secret}
@@ -795,6 +867,8 @@ Telegram:
   Server: ${DOMAIN}
   Port:   ${PORT}
   Secret: ${tg_secret}
+  TLS:    FakeTLS enabled
+  SNI:    ${FRONT_DOMAIN}
 
 Import link:
   ${url}
@@ -903,7 +977,11 @@ remove_installation() {
 }
 
 main() {
+  if [[ $# -eq 0 ]]; then
+    INTERACTIVE_INSTALL="1"
+  fi
   parse_args "$@"
+  interactive_install
   validate_args
 
   case "${ACTION}" in
