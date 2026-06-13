@@ -1,5 +1,13 @@
 # MTProxy FakeTLS Installer
 
+Documentation:
+
+- [English](docs/README.en.md)
+- [简体中文](docs/README.zh-CN.md)
+- [فارسی](docs/README.fa.md)
+
+Support, development, and customization: Telegram `@Bill_999`
+
 One-command Telegram MTProxy installer with:
 
 - FakeTLS style Telegram MTProto proxy.
@@ -30,17 +38,18 @@ This is not SOCKS5 and not a general-purpose VPN. It is for Telegram.
 ## Requirements
 
 - Linux VPS with root access.
-- Systemd.
+- Systemd-based system with `systemctl` available and running.
 - Port `443` available, or choose another port.
 - A domain pointing to the VPS.
 - Docker. The installer can install Docker automatically on common Debian/Ubuntu/CentOS/RHEL-style systems.
+- Docker Compose v2 plugin, or legacy `docker-compose`. The installer tries to install it if it is missing.
 
 If using Cloudflare DNS, the record must be **DNS only**, not proxied/orange-cloud.
 
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_NAME/YOUR_REPO/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-installer/main/install.sh -o install.sh
 sudo bash install.sh --domain mtproto.example.com
 ```
 
@@ -57,6 +66,8 @@ sudo mtproxy
 ```
 
 It opens a number menu for start, stop, restart, status, logs, link output, tag update, secret reset, reinstall, and uninstall.
+
+Running the install command again on the same server updates the existing installation. The script stops the old `mtproxy-faketls` service/container first so its own listener does not block the port check.
 
 ## With Promoted Channel Tag
 
@@ -103,7 +114,7 @@ export CF_ZONE_ID="your_zone_id"
 sudo -E bash install.sh --domain mtproto.example.com --dns yes
 ```
 
-The installer only deletes/recreates the exact hostname passed in `--domain`.
+The installer manages only the exact hostname passed in `--domain`. It creates or updates the matching A record and keeps it DNS-only.
 
 It creates:
 
@@ -248,9 +259,11 @@ install.sh
 Push it to GitHub, then test on a fresh VPS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_NAME/YOUR_REPO/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-installer/main/install.sh -o install.sh
 sudo bash install.sh --domain mtproto.example.com
 ```
+
+Before publishing, replace `Sunny8886667` in all README files with your real GitHub username. Keep the repository name as `mtproxy-faketls-installer` unless you publish it under a different name.
 
 For Cloudflare DNS:
 

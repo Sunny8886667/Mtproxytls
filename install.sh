@@ -28,6 +28,11 @@ usage() {
   cat <<'EOF'
 MTProxy FakeTLS installer with promoted-channel tag support.
 
++------------------------------------------------------------------+
+| Support / Development / Customization                            |
+| Telegram: @Bill_999                                               |
++------------------------------------------------------------------+
+
 Usage:
   sudo bash install.sh --domain mtproto.example.com [options]
 
@@ -79,6 +84,17 @@ log() {
   printf '[mtproxy] %s\n' "$*"
 }
 
+print_contact_box() {
+  cat <<'EOF'
++------------------------------------------------------------------+
+| MTProxy FakeTLS Installer                                        |
+|                                                                  |
+| Script support, development, and customization                    |
+| Telegram: @Bill_999                                               |
++------------------------------------------------------------------+
+EOF
+}
+
 die() {
   printf '[mtproxy] ERROR: %s\n' "$*" >&2
   exit 1
@@ -92,29 +108,68 @@ have_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
 
+require_value() {
+  local opt="$1"
+  local value="${2:-}"
+  [[ -n "${value}" && "${value}" != -* ]] || die "${opt} requires a value"
+  printf '%s\n' "${value}"
+}
+
+is_hostname() {
+  local name="${1%.}"
+  [[ ${#name} -ge 3 && ${#name} -le 253 ]] || return 1
+  [[ "${name}" == *.* ]] || return 1
+  [[ "${name}" =~ ^[A-Za-z0-9.-]+$ ]] || return 1
+
+  local label
+  IFS='.' read -ra labels <<< "${name}"
+  for label in "${labels[@]}"; do
+    [[ -n "${label}" && ${#label} -le 63 ]] || return 1
+    [[ "${label}" =~ ^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]] || return 1
+  done
+}
+
+is_ipv4() {
+  local ip="$1"
+  [[ "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+
+  local octet
+  IFS='.' read -ra octets <<< "${ip}"
+  [[ ${#octets[@]} -eq 4 ]] || return 1
+  for octet in "${octets[@]}"; do
+    [[ "${octet}" =~ ^[0-9]+$ ]] || return 1
+    (( 10#${octet} >= 0 && 10#${octet} <= 255 )) || return 1
+  done
+}
+
+ensure_systemd() {
+  have_cmd systemctl || die "systemctl is required"
+  [[ -d /run/systemd/system ]] || die "systemd is not running; run this on a systemd-based VPS"
+}
+
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --domain)
-        DOMAIN="${2:-}"; shift 2 ;;
+        DOMAIN="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --port)
-        PORT="${2:-}"; shift 2 ;;
+        PORT="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --front-domain)
-        FRONT_DOMAIN="${2:-}"; shift 2 ;;
+        FRONT_DOMAIN="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --public-ip)
-        PUBLIC_IP="${2:-}"; shift 2 ;;
+        PUBLIC_IP="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --secret)
-        SECRET="${2:-}"; shift 2 ;;
+        SECRET="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --tag)
-        TAG="${2:-}"; shift 2 ;;
+        TAG="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --update-tag)
-        ACTION="update-tag"; TAG="${2:-}"; shift 2 ;;
+        ACTION="update-tag"; TAG="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --cf-token)
-        CF_API_TOKEN="${2:-}"; shift 2 ;;
+        CF_API_TOKEN="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --cf-zone-id)
-        CF_ZONE_ID="${2:-}"; shift 2 ;;
+        CF_ZONE_ID="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --dns)
-        DO_DNS="${2:-}"; shift 2 ;;
+        DO_DNS="$(require_value "$1" "${2:-}")"; shift 2 ;;
       --force)
         FORCE="1"; shift ;;
       --start)
@@ -140,6 +195,17 @@ parse_args() {
 }
 
 validate_common() {
+  DOMAIN="${DOMAIN%.}"
+  FRONT_DOMAIN="${FRONT_DOMAIN%.}"
+  if [[ -n "${DOMAIN}" ]] && ! is_hostname "${DOMAIN}"; then
+    die "--domain must be a valid public hostname, for example mtproto.example.com"
+  fi
+  if [[ -n "${FRONT_DOMAIN}" ]] && ! is_hostname "${FRONT_DOMAIN}"; then
+    die "--front-domain must be a valid public hostname"
+  fi
+  if [[ -n "${PUBLIC_IP}" ]] && ! is_ipv4 "${PUBLIC_IP}"; then
+    die "--public-ip must be a valid IPv4 address"
+  fi
   [[ "${PORT}" =~ ^[0-9]+$ ]] || die "--port must be a number"
   if (( PORT < 1 || PORT > 65535 )); then
     die "--port must be between 1 and 65535"
@@ -177,7 +243,7 @@ validate_args() {
 
 install_base_deps() {
   local missing=()
-  for cmd in curl awk sed grep openssl systemctl python3; do
+  for cmd in curl awk sed grep openssl systemctl python3 ss; do
     have_cmd "${cmd}" || missing+=("${cmd}")
   done
 
@@ -188,13 +254,13 @@ install_base_deps() {
   if have_cmd apt-get; then
     log "installing dependencies: ${missing[*]}"
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates openssl coreutils grep sed gawk python3
+    DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates openssl coreutils grep sed gawk python3 iproute2
   elif have_cmd dnf; then
     log "installing dependencies: ${missing[*]}"
-    dnf install -y curl ca-certificates openssl coreutils grep sed gawk python3
+    dnf install -y curl ca-certificates openssl coreutils grep sed gawk python3 iproute
   elif have_cmd yum; then
     log "installing dependencies: ${missing[*]}"
-    yum install -y curl ca-certificates openssl coreutils grep sed gawk python3
+    yum install -y curl ca-certificates openssl coreutils grep sed gawk python3 iproute
   else
     die "missing dependencies (${missing[*]}) and no supported package manager found"
   fi
@@ -202,6 +268,7 @@ install_base_deps() {
 
 install_docker() {
   if have_cmd docker; then
+    ensure_docker_running
     return
   fi
 
@@ -234,21 +301,77 @@ install_docker() {
     die "cannot install Docker automatically on this OS"
   fi
 
+  ensure_docker_running
+}
+
+has_docker_compose() {
+  if docker compose version >/dev/null 2>&1; then
+    return 0
+  fi
+  have_cmd docker-compose
+}
+
+install_compose_plugin() {
+  if has_docker_compose; then
+    return
+  fi
+
+  log "Docker Compose not found; installing Compose plugin"
+  if have_cmd apt-get; then
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-plugin || \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose
+  elif have_cmd dnf; then
+    dnf install -y docker-compose-plugin || dnf install -y docker-compose
+  elif have_cmd yum; then
+    yum install -y docker-compose-plugin || yum install -y docker-compose
+  else
+    die "Docker Compose is not available and no supported package manager found"
+  fi
+
+  has_docker_compose || die "Docker Compose is still not available after installation"
+}
+
+ensure_docker_running() {
+  have_cmd docker || die "Docker is not installed"
   systemctl enable --now docker
+  docker info >/dev/null 2>&1 || die "Docker daemon is not running"
 }
 
 docker_compose_cmd() {
-  if docker compose version >/dev/null 2>&1; then
-    echo "docker compose"
+  if have_cmd docker && docker compose version >/dev/null 2>&1; then
+    printf '%s compose\n' "$(command -v docker)"
   elif have_cmd docker-compose; then
-    echo "docker-compose"
+    command -v docker-compose
   else
     die "Docker Compose is not available"
   fi
 }
 
+update_env_var() {
+  local key="$1"
+  local value="$2"
+  local tmp
+  tmp="$(mktemp)"
+
+  if grep -q "^${key}=" "${ENV_FILE}"; then
+    awk -v key="${key}" -v value="${value}" 'BEGIN { updated=0 }
+      $0 ~ "^" key "=" && !updated { print key "=" value; updated=1; next }
+      { print }
+      END { if (!updated) print key "=" value }' "${ENV_FILE}" > "${tmp}"
+  else
+    cat "${ENV_FILE}" > "${tmp}"
+    printf '%s=%s\n' "${key}" "${value}" >> "${tmp}"
+  fi
+
+  cat "${tmp}" > "${ENV_FILE}"
+  rm -f "${tmp}"
+  chmod 600 "${ENV_FILE}"
+}
+
 detect_public_ip() {
   if [[ -n "${PUBLIC_IP}" ]]; then
+    is_ipv4 "${PUBLIC_IP}" || die "--public-ip must be a valid IPv4 address"
     printf '%s\n' "${PUBLIC_IP}"
     return
   fi
@@ -256,12 +379,26 @@ detect_public_ip() {
   local ip=""
   for url in https://api.ipify.org https://ifconfig.co/ip https://icanhazip.com; do
     ip="$(curl -fsSL --connect-timeout 5 --max-time 10 "${url}" 2>/dev/null | tr -d '[:space:]' || true)"
-    if [[ "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    if is_ipv4 "${ip}"; then
       printf '%s\n' "${ip}"
       return
     fi
   done
   die "could not auto-detect public IPv4; pass --public-ip"
+}
+
+stop_existing_install() {
+  if [[ -f "${SYSTEMD_FILE}" ]] || systemctl list-unit-files "${SERVICE_NAME}.service" >/dev/null 2>&1; then
+    if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+      log "stopping existing ${SERVICE_NAME} service before reinstall"
+      systemctl stop "${SERVICE_NAME}.service" || true
+    fi
+  fi
+
+  if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -Fxq "${SERVICE_NAME}"; then
+    log "removing existing ${SERVICE_NAME} container before reinstall"
+    docker rm -f "${SERVICE_NAME}" >/dev/null 2>&1 || true
+  fi
 }
 
 check_port_free() {
@@ -313,7 +450,7 @@ services:
       MTP_PORT: ${PORT}
       MTP_SECRET: ${MTP_SECRET}
       MTP_TAG: ${MTP_TAG}
-      MTP_TLS_ONLY: "1"
+      MTP_TLS_ONLY: "t"
 EOF
   chmod 600 "${COMPOSE_FILE}"
 }
@@ -349,10 +486,8 @@ set -Eeuo pipefail
 APP_NAME="mtproxy-faketls"
 INSTALL_DIR="/opt/${APP_NAME}"
 ENV_FILE="${INSTALL_DIR}/.env"
-COMPOSE_FILE="${INSTALL_DIR}/compose.yml"
 SERVICE_NAME="${APP_NAME}"
 INSTALL_SCRIPT="${INSTALL_DIR}/install.sh"
-DEFAULT_TAG="00000000000000000000000000000000"
 
 die() {
   printf '[mtproxy] ERROR: %s\n' "$*" >&2
@@ -363,20 +498,41 @@ need_root() {
   [[ "${EUID}" -eq 0 ]] || die "run as root"
 }
 
+have_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
 load_env() {
   [[ -f "${ENV_FILE}" ]] || die "${ENV_FILE} not found; install first"
   # shellcheck disable=SC1090
   source "${ENV_FILE}"
 }
 
-compose_cmd() {
-  if docker compose version >/dev/null 2>&1; then
-    echo "docker compose"
-  elif command -v docker-compose >/dev/null 2>&1; then
-    echo "docker-compose"
+validate_hex32() {
+  local value="$1"
+  local label="$2"
+  [[ "${value}" =~ ^[[:xdigit:]]{32}$ ]] || die "${label} must be exactly 32 hex characters"
+}
+
+update_env_var() {
+  local key="$1"
+  local value="$2"
+  local tmp
+  tmp="$(mktemp)"
+
+  if grep -q "^${key}=" "${ENV_FILE}"; then
+    awk -v key="${key}" -v value="${value}" 'BEGIN { updated=0 }
+      $0 ~ "^" key "=" && !updated { print key "=" value; updated=1; next }
+      { print }
+      END { if (!updated) print key "=" value }' "${ENV_FILE}" > "${tmp}"
   else
-    die "Docker Compose is not available"
+    cat "${ENV_FILE}" > "${tmp}"
+    printf '%s=%s\n' "${key}" "${value}" >> "${tmp}"
   fi
+
+  cat "${tmp}" > "${ENV_FILE}"
+  rm -f "${tmp}"
+  chmod 600 "${ENV_FILE}"
 }
 
 telegram_secret() {
@@ -406,6 +562,9 @@ Import link:
 
 Promoted tag:
   ${MTP_TAG}
+
+Support / Development / Customization:
+  Telegram: @Bill_999
 OUT
 }
 
@@ -422,16 +581,6 @@ restart_compose() {
   systemctl is-active --quiet "${SERVICE_NAME}.service" || die "service failed to restart"
 }
 
-update_env_var() {
-  local key="$1"
-  local value="$2"
-  if grep -q "^${key}=" "${ENV_FILE}"; then
-    sed -i "s#^${key}=.*#${key}=${value}#" "${ENV_FILE}"
-  else
-    printf '%s=%s\n' "${key}" "${value}" >> "${ENV_FILE}"
-  fi
-}
-
 update_tag() {
   need_root
   load_env
@@ -439,7 +588,7 @@ update_tag() {
   if [[ -z "${tag}" ]]; then
     read -r -p "Enter 32-hex promoted tag from @MTProxybot: " tag
   fi
-  [[ "${tag}" =~ ^[[:xdigit:]]{32}$ ]] || die "tag must be exactly 32 hex characters"
+  validate_hex32 "${tag}" "tag"
   update_env_var "MTP_TAG" "${tag}"
   restart_compose
   print_link
@@ -452,7 +601,7 @@ reset_secret() {
   if [[ -z "${secret}" ]]; then
     secret="$(openssl rand -hex 16)"
   fi
-  [[ "${secret}" =~ ^[[:xdigit:]]{32}$ ]] || die "secret must be exactly 32 hex characters"
+  validate_hex32 "${secret}" "secret"
   update_env_var "MTP_SECRET" "${secret}"
   restart_compose
   print_link
@@ -567,6 +716,7 @@ cloudflare_dns() {
   CF_API_TOKEN="${CF_API_TOKEN}" CF_ZONE_ID="${CF_ZONE_ID}" DOMAIN="${DOMAIN}" PUBLIC_IP="${public_ip}" python3 <<'PY'
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -580,25 +730,38 @@ headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json
 def request(method, url, data=None):
     payload = None if data is None else json.dumps(data).encode()
     req = urllib.request.Request(url, data=payload, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=30) as res:
-        out = json.loads(res.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            out = json.loads(res.read().decode())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")
+        raise SystemExit(f"Cloudflare API HTTP {exc.code}: {body}")
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"Cloudflare API request failed: {exc.reason}")
     if not out.get("success"):
         raise SystemExit(json.dumps(out, indent=2))
     return out
 
 query = urllib.parse.urlencode({"name": domain, "per_page": 100})
 records = request("GET", f"{base}?{query}")["result"]
-for rec in records:
-    request("DELETE", f"{base}/{rec['id']}")
-
-created = request("POST", base, {
+matching_a = [rec for rec in records if rec.get("type") == "A"]
+payload = {
     "type": "A",
     "name": domain,
     "content": public_ip,
     "ttl": 1,
     "proxied": False,
     "comment": "Telegram MTProxy FakeTLS"
-})["result"]
+}
+
+if matching_a:
+    primary = matching_a[0]
+    created = request("PUT", f"{base}/{primary['id']}", payload)["result"]
+    for rec in matching_a[1:]:
+        request("DELETE", f"{base}/{rec['id']}")
+else:
+    created = request("POST", base, payload)["result"]
+
 print(f"{created['name']} {created['type']} {created['content']} proxied={created['proxied']}")
 PY
 }
@@ -609,6 +772,9 @@ start_service() {
   sleep 3
   systemctl is-active --quiet "${SERVICE_NAME}.service" || {
     systemctl status "${SERVICE_NAME}.service" --no-pager -l || true
+    if have_cmd docker; then
+      docker logs "${SERVICE_NAME}" 2>/dev/null || true
+    fi
     die "service failed to start"
   }
 }
@@ -643,11 +809,17 @@ Service:
 Files:
   ${ENV_FILE}
   ${COMPOSE_FILE}
+
+Support / Development / Customization:
+  Telegram: @Bill_999
 EOF
 }
 
 service_action() {
   need_root
+  if [[ ! -f "${SYSTEMD_FILE}" && "${ACTION}" != "status" ]]; then
+    die "${SERVICE_NAME} is not installed"
+  fi
   case "${ACTION}" in
     start)
       systemctl start "${SERVICE_NAME}.service"
@@ -698,14 +870,16 @@ update_tag() {
   [[ -f "${ENV_FILE}" ]] || die "${ENV_FILE} not found; run install first"
   log "updating promoted-channel tag"
   [[ "${TAG}" =~ ^[[:xdigit:]]{32}$ ]] || die "tag must be exactly 32 hex characters"
-  if grep -q '^MTP_TAG=' "${ENV_FILE}"; then
-    sed -i "s/^MTP_TAG=.*/MTP_TAG=${TAG}/" "${ENV_FILE}"
-  else
-    printf 'MTP_TAG=%s\n' "${TAG}" >> "${ENV_FILE}"
-  fi
+  update_env_var "MTP_TAG" "${TAG}"
   systemctl restart "${SERVICE_NAME}.service"
   sleep 2
-  systemctl is-active --quiet "${SERVICE_NAME}.service" || die "service failed after tag update"
+  systemctl is-active --quiet "${SERVICE_NAME}.service" || {
+    systemctl status "${SERVICE_NAME}.service" --no-pager -l || true
+    if have_cmd docker; then
+      docker logs "${SERVICE_NAME}" 2>/dev/null || true
+    fi
+    die "service failed after tag update"
+  }
   print_access
 }
 
@@ -748,8 +922,13 @@ main() {
   esac
 
   need_root
+  print_contact_box
+  ensure_systemd
   install_base_deps
   install_docker
+  ensure_docker_running
+  install_compose_plugin
+  stop_existing_install
   check_port_free
   write_env
   write_compose

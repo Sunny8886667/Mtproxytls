@@ -1,0 +1,154 @@
+# MTProxy FakeTLS Installer Guide
+
+This script installs a Telegram MTProto proxy with FakeTLS mode, promoted-channel tag support, Docker deployment, optional Cloudflare DNS automation, and a post-install management menu.
+
+For script support, development, or customization, contact Telegram: `@Bill_999`
+
+## What It Is For
+
+- Telegram MTProto proxy only.
+- Not SOCKS5.
+- Not a general-purpose VPN.
+- Designed for users with a Linux VPS, a domain name, and root access.
+
+## Requirements
+
+- Linux VPS with root access.
+- A systemd-based system with working `systemctl`.
+- A domain pointing to the VPS.
+- Port `443` available, or another port specified with `--port`.
+- Docker and Docker Compose. The installer tries to install missing components automatically.
+
+If you use Cloudflare, the DNS record must be DNS only. Do not enable the orange-cloud proxy.
+
+## Quick Start
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-installer/main/install.sh -o install.sh
+sudo bash install.sh --domain mtproto.example.com
+```
+
+Replace `mtproto.example.com` with your real hostname.
+
+After installation, the script prints a Telegram import link:
+
+```text
+https://t.me/proxy?server=mtproto.example.com&port=443&secret=...
+```
+
+Open that link in Telegram to add the proxy.
+
+## Promoted Channel Tag
+
+Promoted-channel tags are usually provided by `@MTProxybot`.
+
+Recommended flow:
+
+1. Install the proxy once without a tag.
+2. Open the generated proxy link in Telegram.
+3. Register or manage the proxy in `@MTProxybot`.
+4. Get the 32-character hexadecimal tag.
+5. Update the server:
+
+```bash
+sudo bash install.sh --update-tag 0123456789abcdef0123456789abcdef
+```
+
+If you already have a tag, you can pass it during installation:
+
+```bash
+sudo bash install.sh \
+  --domain mtproto.example.com \
+  --tag 0123456789abcdef0123456789abcdef
+```
+
+## Cloudflare DNS Automation
+
+Create a Cloudflare API token with these permissions:
+
+```text
+Zone:DNS:Edit
+Zone:Zone:Read
+```
+
+Then run:
+
+```bash
+export CF_API_TOKEN="your_token"
+export CF_ZONE_ID="your_zone_id"
+sudo -E bash install.sh --domain mtproto.example.com --dns yes
+```
+
+The installer creates or updates only the exact hostname passed with `--domain`, using a DNS-only A record.
+
+## Management Commands
+
+After installation, open the interactive menu:
+
+```bash
+sudo mtproxy
+```
+
+The menu supports start, stop, restart, status, logs, link output, tag update, secret reset, reinstall, and uninstall.
+
+Direct commands are also available:
+
+```bash
+sudo mtproxy start
+sudo mtproxy stop
+sudo mtproxy restart
+sudo mtproxy status
+sudo mtproxy logs
+sudo mtproxy link
+sudo mtproxy tag 0123456789abcdef0123456789abcdef
+sudo mtproxy reset-secret
+sudo mtproxy reinstall
+sudo mtproxy uninstall
+```
+
+## Uninstall
+
+```bash
+sudo bash install.sh --remove
+```
+
+This removes:
+
+```text
+/opt/mtproxy-faketls
+/etc/systemd/system/mtproxy-faketls.service
+/usr/local/bin/mtproxy
+```
+
+It does not remove Docker and does not delete DNS records.
+
+## Troubleshooting
+
+Check whether port 443 is in use:
+
+```bash
+sudo ss -lntp | grep ':443'
+```
+
+Check service status:
+
+```bash
+sudo systemctl status mtproxy-faketls
+```
+
+Follow logs:
+
+```bash
+sudo journalctl -u mtproxy-faketls -f
+sudo docker logs -f mtproxy-faketls
+```
+
+Print the Telegram link again:
+
+```bash
+sudo bash install.sh --link
+```
+
+## Contact
+
+For script support, development, or customization, contact Telegram: `@Bill_999`
