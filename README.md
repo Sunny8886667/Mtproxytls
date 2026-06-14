@@ -56,7 +56,7 @@ If using Cloudflare DNS, the record must be **DNS only**, not proxied/orange-clo
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-installer/main/install.sh -o install.sh
+curl -fsSL [https://raw.githubusercontent.com/Sunny8886667/mtproxy-faketls-installer/main/install.sh](https://raw.githubusercontent.com/Sunny8886667/Mtproxytls/8408913bbf5345219208cfa71158b4159a4c7e73/install.sh) -o install.sh
 sudo bash install.sh
 ```
 
